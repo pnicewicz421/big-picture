@@ -1,6 +1,0 @@
-[gd_resource type="NativeScript" format=3]
-
-[resource]
-resource_name = "WelcomeScreen"
-class_name = "WelcomeScreen"
-library = ExtResource("res://big_picture.gdextension")
