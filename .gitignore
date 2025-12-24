@@ -10,6 +10,7 @@ export_presets.cfg
 .mono/
 data_*/
 *.translation
+.godot/
 
 # IDE
 .vscode/

@@ -16,12 +16,16 @@
 
 use godot::prelude::*;
 
+mod network;
+mod welcome_screen;
+
 struct BigPictureExtension;
 
 #[gdextension]
-unsafe impl ExtensionLibrary for BigPictureExtension {}
-
-// TODO: Implement GDExtension classes for:
-// - WelcomeScreen
-// - LobbyScreen
-// - GameScreen
+unsafe impl ExtensionLibrary for BigPictureExtension {
+    fn on_level_init(level: InitLevel) {
+        if level == InitLevel::Scene {
+            godot_print!("Big Picture extension initialized!");
+        }
+    }
+}
