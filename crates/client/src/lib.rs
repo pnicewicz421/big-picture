@@ -11,12 +11,11 @@
 //! ## Architecture
 //!
 //! - Rust classes extend Godot nodes via `godot::prelude`
-//! - HTTP communication with backend server using `reqwest`
+//! - HTTP communication using Godot's HTTPRequest node
 //! - State synchronized via polling (future: WebSockets)
 
 use godot::prelude::*;
 
-mod network;
 mod welcome_screen;
 
 struct BigPictureExtension;

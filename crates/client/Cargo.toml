@@ -15,9 +15,6 @@ big-picture-domain = { path = "../domain" }
 # Godot bindings (GDExtension for Godot 4.x)
 godot.workspace = true
 
-# HTTP client for backend communication
-reqwest.workspace = true
-
 # Serialization
 serde.workspace = true
 serde_json.workspace = true
