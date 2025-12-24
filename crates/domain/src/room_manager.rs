@@ -1,0 +1,214 @@
+//! Room management logic for handling multiple game sessions.
+
+use std::collections::HashMap;
+use rand::{distributions::Alphanumeric, Rng};
+use crate::errors::RoomError;
+use crate::player::Player;
+use crate::room::{Room, RoomState};
+use crate::types::{AvatarId, PlayerId, RoomId};
+
+/// Manages active game rooms and player sessions.
+#[derive(Debug, Default)]
+pub struct RoomManager {
+    /// Map of room codes to Room IDs.
+    code_to_id: HashMap<String, RoomId>,
+    
+    /// Map of Room IDs to Room instances.
+    rooms: HashMap<RoomId, Room>,
+}
+
+impl RoomManager {
+    /// Create a new empty RoomManager.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a new room with a unique random code.
+    ///
+    /// Returns the RoomId and the generated room code.
+    pub fn create_room(&mut self) -> (RoomId, String) {
+        let code = self.generate_unique_code();
+        let room = Room::new(code.clone());
+        let id = room.id;
+        
+        self.code_to_id.insert(code.clone(), id);
+        self.rooms.insert(id, room);
+        
+        (id, code)
+    }
+
+    /// Join a room using a room code.
+    ///
+    /// Returns the RoomId and PlayerId if successful.
+    pub fn join_room(
+        &mut self,
+        code: &str,
+        nickname: String,
+        avatar_id: AvatarId,
+    ) -> Result<(RoomId, PlayerId), RoomError> {
+        let room_id = self.code_to_id.get(code)
+            .copied()
+            .ok_or_else(|| RoomError::InvalidCode(code.to_string()))?;
+            
+        let room = self.rooms.get_mut(&room_id)
+            .ok_or_else(|| RoomError::NotFound(code.to_string()))?;
+            
+        if room.state != RoomState::Lobby {
+            return Err(RoomError::AlreadyStarted(room_id));
+        }
+        
+        if room.is_full() {
+            return Err(RoomError::Full(room_id));
+        }
+        
+        if room.has_player_with_nickname(&nickname) {
+            return Err(RoomError::NicknameTaken(nickname, room_id));
+        }
+        
+        let player = Player::new(nickname, avatar_id);
+        let player_id = player.id;
+        room.add_player(player);
+        
+        Ok((room_id, player_id))
+    }
+
+    /// Rejoin a room if a player was disconnected.
+    pub fn rejoin_room(
+        &mut self,
+        code: &str,
+        nickname: &str,
+    ) -> Result<(RoomId, PlayerId), RoomError> {
+        let room_id = self.code_to_id.get(code)
+            .copied()
+            .ok_or_else(|| RoomError::InvalidCode(code.to_string()))?;
+            
+        let room = self.rooms.get_mut(&room_id)
+            .ok_or_else(|| RoomError::NotFound(code.to_string()))?;
+            
+        let player = room.find_player_by_nickname(nickname)
+            .ok_or_else(|| RoomError::NicknameTaken(nickname.to_string(), room_id))?; // Reusing error for "not found" in this context
+            
+        let player_id = player.id;
+        
+        // In a real app, we'd mark them as connected here
+        if let Some(p) = room.find_player_mut(player_id) {
+            p.reconnect();
+        }
+        
+        Ok((room_id, player_id))
+    }
+
+    /// Leave a room.
+    pub fn leave_room(&mut self, room_id: RoomId, player_id: PlayerId) -> Result<(), RoomError> {
+        let room = self.rooms.get_mut(&room_id)
+            .ok_or_else(|| RoomError::NotFound(room_id.to_string()))?;
+            
+        if room.remove_player(player_id) {
+            // If room is empty, we could potentially remove it
+            if room.player_count() == 0 {
+                let code = room.code.clone();
+                self.code_to_id.remove(&code);
+                self.rooms.remove(&room_id);
+            }
+            Ok(())
+        } else {
+            Err(RoomError::PlayerNotFound(player_id, room_id))
+        }
+    }
+
+    /// Get a room by ID.
+    pub fn get_room(&self, room_id: &RoomId) -> Option<&Room> {
+        self.rooms.get(room_id)
+    }
+
+    /// Get a mutable reference to a room by ID.
+    pub fn get_room_mut(&mut self, room_id: &RoomId) -> Option<&mut Room> {
+        self.rooms.get_mut(room_id)
+    }
+
+    /// Get a room by code.
+    pub fn get_room_by_code(&self, code: &str) -> Option<&Room> {
+        self.code_to_id.get(code).and_then(|id| self.rooms.get(id))
+    }
+
+    /// Generate a unique 6-character alphanumeric room code.
+    fn generate_unique_code(&self) -> String {
+        let mut rng = rand::thread_rng();
+        loop {
+            let code: String = (0..6)
+                .map(|_| rng.sample(Alphanumeric) as char)
+                .map(|c| c.to_ascii_uppercase())
+                .collect();
+                
+            if !self.code_to_id.contains_key(&code) {
+                return code;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_room() {
+        let mut manager = RoomManager::new();
+        let (id, code) = manager.create_room();
+        assert_eq!(code.len(), 6);
+        let room = manager.get_room(&id).unwrap();
+        assert_eq!(room.code.len(), 6);
+        assert_eq!(room.player_count(), 0);
+    }
+
+    #[test]
+    fn test_join_room() {
+        let mut manager = RoomManager::new();
+        let (id, code) = manager.create_room();
+        
+        let result = manager.join_room(&code, "Alice".to_string(), AvatarId::default());
+        assert!(result.is_ok());
+        
+        let (room_id, player_id) = result.unwrap();
+        assert_eq!(room_id, id);
+        
+        let room = manager.get_room(&id).unwrap();
+        assert_eq!(room.player_count(), 1);
+        assert!(room.find_player(player_id).is_some());
+    }
+
+    #[test]
+    fn test_join_full_room() {
+        let mut manager = RoomManager::new();
+        let (id, code) = manager.create_room();
+        
+        for i in 0..8 {
+            manager.join_room(&code, format!("Player{}", i), AvatarId::default()).unwrap();
+        }
+        
+        let result = manager.join_room(&code, "Ninth".to_string(), AvatarId::default());
+        assert!(matches!(result, Err(RoomError::Full(_))));
+    }
+
+    #[test]
+    fn test_duplicate_nickname() {
+        let mut manager = RoomManager::new();
+        let (id, code) = manager.create_room();
+        
+        manager.join_room(&code, "Alice".to_string(), AvatarId::default()).unwrap();
+        let result = manager.join_room(&code, "Alice".to_string(), AvatarId::default());
+        assert!(matches!(result, Err(RoomError::NicknameTaken(_, _))));
+    }
+
+    #[test]
+    fn test_leave_room() {
+        let mut manager = RoomManager::new();
+        let (id, code) = manager.create_room();
+        
+        let (_, player_id) = manager.join_room(&code, "Alice".to_string(), AvatarId::default()).unwrap();
+        assert_eq!(manager.get_room(&id).unwrap().player_count(), 1);
+        
+        manager.leave_room(id, player_id).unwrap();
+        assert!(manager.get_room(&id).is_none(), "Room should be removed when empty");
+    }
+}

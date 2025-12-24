@@ -16,13 +16,16 @@ pub mod types;
 pub mod room;
 pub mod player;
 pub mod game;
-// pub mod errors;
+pub mod errors;
+pub mod room_manager;
 
 // Re-export commonly used types at crate root
 pub use game::{GameOutcome, GameState, PlayerAction};
 pub use player::Player;
 pub use room::{Room, RoomState};
 pub use types::{AvatarId, ImageId, OptionId, PlayerId, RoomId};
+pub use errors::{RoomError, JoinError};
+pub use room_manager::RoomManager;
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")

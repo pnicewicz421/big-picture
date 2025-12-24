@@ -21,6 +21,11 @@ impl RoomId {
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }
+
+    /// Create a RoomId from a string (for deserializing from URLs/JSON).
+    pub fn from_string(s: &str) -> Result<Self, uuid::Error> {
+        Ok(Self(Uuid::parse_str(s)?))
+    }
 }
 
 impl Default for RoomId {
@@ -48,6 +53,11 @@ impl PlayerId {
     /// Get the inner UUID.
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
+    }
+
+    /// Create a PlayerId from a string (for deserializing from URLs/JSON).
+    pub fn from_string(s: &str) -> Result<Self, uuid::Error> {
+        Ok(Self(Uuid::parse_str(s)?))
     }
 }
 

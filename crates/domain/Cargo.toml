@@ -11,6 +11,7 @@ serde_json.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
 pmat.workspace = true
+rand = "0.8"
 
 [dev-dependencies]
 # Test utilities
