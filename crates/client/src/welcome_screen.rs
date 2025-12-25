@@ -209,10 +209,16 @@ impl WelcomeScreen {
                     
                     let nickname = self.player_nickname.as_deref().unwrap_or("Player");
                     let code = self.room_code.as_deref().unwrap_or("???");
+                    let room_id_str = room_id.to_string();
+                    let code_str = code.to_string();
+                    let player_id_str = player_id.to_string();
                     
                     self.set_status(&format!("Joined room {} as {}", code, nickname), false);
                     godot_print!("Player ID: {}, Room ID: {}", player_id, room_id);
                     godot_print!("Ready to transition to lobby!");
+                    
+                    // Transition to lobby screen
+                    self.transition_to_lobby(&room_id_str, &code_str, &player_id_str, false);
                     
                     self.set_button_enabled("JoinButton", true);
                     return;
@@ -273,5 +279,31 @@ impl WelcomeScreen {
         if let Some(mut button) = self.base_mut().try_get_node_as::<Button>(&full_path) {
             button.set_disabled(!enabled);
         }
+    }
+    
+    fn transition_to_lobby(&mut self, room_id: &str, room_code: &str, player_id: &str, is_host: bool) {
+        godot_print!("Transitioning to lobby: room={}, player={}, host={}", room_id, player_id, is_host);
+        
+        // Get scene tree
+        let Some(mut tree) = self.base().get_tree() else {
+            godot_error!("Failed to get scene tree");
+            return;
+        };
+        
+        // Load lobby scene
+        let lobby_path = "res://scenes/lobby_screen.tscn";
+        
+        // Change scene
+        let result = tree.change_scene_to_file(lobby_path);
+        if result != godot::global::Error::OK {
+            godot_error!("Failed to change scene: {:?}", result);
+            return;
+        }
+        
+        godot_print!("Scene change initiated to {}", lobby_path);
+        
+        // Note: We cannot set lobby info here because the scene hasn't loaded yet
+        // Instead, we'll use autoload or signals in the future
+        // For now, the lobby will start with default values and player must rejoin
     }
 }

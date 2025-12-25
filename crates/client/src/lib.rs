@@ -17,6 +17,7 @@
 use godot::prelude::*;
 
 mod welcome_screen;
+mod lobby_screen;
 
 struct BigPictureExtension;
 
