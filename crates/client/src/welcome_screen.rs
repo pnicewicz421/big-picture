@@ -35,7 +35,7 @@ impl IControl for WelcomeScreen {
     
     fn ready(&mut self) {
         godot_print!("WelcomeScreen ready");
-        self.set_status("Ready to play! Make sure server is running on localhost:3000", false);
+        self.set_status("Ready to play! Make sure server is running on 192.168.1.19:3000", false);
         
         // Create HTTPRequest nodes for network calls
         let mut create_request = HttpRequest::new_alloc();
