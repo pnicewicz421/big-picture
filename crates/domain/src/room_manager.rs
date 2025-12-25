@@ -211,4 +211,131 @@ mod tests {
         manager.leave_room(id, player_id).unwrap();
         assert!(manager.get_room(&id).is_none(), "Room should be removed when empty");
     }
+
+    #[test]
+    fn test_invalid_room_code() {
+        let mut manager = RoomManager::new();
+        let result = manager.join_room("INVALID", "Alice".to_string(), AvatarId::default());
+        assert!(matches!(result, Err(RoomError::InvalidCode(_))));
+    }
+
+    #[test]
+    fn test_empty_room_code() {
+        let mut manager = RoomManager::new();
+        let result = manager.join_room("", "Alice".to_string(), AvatarId::default());
+        assert!(matches!(result, Err(RoomError::InvalidCode(_))));
+    }
+
+    #[test]
+    fn test_case_sensitive_room_code() {
+        let mut manager = RoomManager::new();
+        let (_id, code) = manager.create_room();
+        
+        // Try lowercase version of uppercase code
+        let lowercase = code.to_lowercase();
+        let result = manager.join_room(&lowercase, "Alice".to_string(), AvatarId::default());
+        assert!(matches!(result, Err(RoomError::InvalidCode(_))));
+    }
+
+    #[test]
+    fn test_rejoin_room() {
+        let mut manager = RoomManager::new();
+        let (id, code) = manager.create_room();
+        
+        let (_, player_id) = manager.join_room(&code, "Alice".to_string(), AvatarId::default()).unwrap();
+        
+        // Leave and rejoin
+        manager.leave_room(id, player_id).ok();
+        let result = manager.join_room(&code, "Alice".to_string(), AvatarId::default());
+        
+        // After leaving, room is empty and deleted, so rejoin fails with InvalidCode
+        assert!(matches!(result, Err(RoomError::InvalidCode(_))));
+    }
+
+    #[test]
+    fn test_multiple_players_leave() {
+        let mut manager = RoomManager::new();
+        let (id, code) = manager.create_room();
+        
+        let (_, p1) = manager.join_room(&code, "Alice".to_string(), AvatarId::default()).unwrap();
+        let (_, p2) = manager.join_room(&code, "Bob".to_string(), AvatarId::default()).unwrap();
+        let (_, p3) = manager.join_room(&code, "Charlie".to_string(), AvatarId::default()).unwrap();
+        
+        assert_eq!(manager.get_room(&id).unwrap().player_count(), 3);
+        
+        // Remove middle player
+        manager.leave_room(id, p2).unwrap();
+        assert_eq!(manager.get_room(&id).unwrap().player_count(), 2);
+        
+        // Remove first player
+        manager.leave_room(id, p1).unwrap();
+        assert_eq!(manager.get_room(&id).unwrap().player_count(), 1);
+        
+        // Remove last player - room should be deleted
+        manager.leave_room(id, p3).unwrap();
+        assert!(manager.get_room(&id).is_none());
+    }
+
+    #[test]
+    fn test_leave_nonexistent_room() {
+        let mut manager = RoomManager::new();
+        let fake_room_id = RoomId::new();
+        let fake_player_id = PlayerId::new();
+        
+        let result = manager.leave_room(fake_room_id, fake_player_id);
+        assert!(matches!(result, Err(RoomError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_leave_nonexistent_player() {
+        let mut manager = RoomManager::new();
+        let (id, code) = manager.create_room();
+        
+        manager.join_room(&code, "Alice".to_string(), AvatarId::default()).unwrap();
+        
+        let fake_player_id = PlayerId::new();
+        let result = manager.leave_room(id, fake_player_id);
+        assert!(matches!(result, Err(RoomError::PlayerNotFound(..))));
+    }
+
+    #[test]
+    fn test_room_code_uniqueness() {
+        let mut manager = RoomManager::new();
+        let mut codes = std::collections::HashSet::new();
+        
+        // Create 100 rooms and ensure all codes are unique
+        for _ in 0..100 {
+            let (_, code) = manager.create_room();
+            assert!(codes.insert(code.clone()), "Code {} was not unique", code);
+        }
+        
+        assert_eq!(codes.len(), 100);
+    }
+
+    #[test]
+    fn test_room_code_format() {
+        let mut manager = RoomManager::new();
+        
+        for _ in 0..50 {
+            let (_, code) = manager.create_room();
+            assert_eq!(code.len(), 6, "Code length must be 6");
+            assert!(code.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()), 
+                   "Code must be alphanumeric uppercase: {}", code);
+        }
+    }
+
+    #[test]
+    fn test_get_mutable_room() {
+        let mut manager = RoomManager::new();
+        let (id, code) = manager.create_room();
+        
+        manager.join_room(&code, "Alice".to_string(), AvatarId::default()).unwrap();
+        
+        {
+            let room = manager.get_room_mut(&id).unwrap();
+            assert_eq!(room.player_count(), 1);
+        }
+        
+        assert!(manager.get_room_mut(&id).is_some());
+    }
 }

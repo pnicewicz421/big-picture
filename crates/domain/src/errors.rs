@@ -33,6 +33,9 @@ pub enum RoomError {
     #[error("Nickname '{0}' is already taken in room {1}")]
     NicknameTaken(String, RoomId),
     
+    #[error("Not enough players to start (need at least 2)")]
+    NotEnoughPlayers(RoomId),
+    
     #[error("Invalid room code: {0}")]
     InvalidCode(String),
     
@@ -57,4 +60,88 @@ pub enum JoinError {
     
     #[error("Invalid nickname")]
     InvalidNickname,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_room_error_display() {
+        let room_id = RoomId::new();
+        let player_id = PlayerId::new();
+        
+        let err = RoomError::NotFound("ABC123".to_string());
+        assert!(err.to_string().contains("ABC123"));
+        
+        let err = RoomError::Full(room_id);
+        assert!(err.to_string().contains("full"));
+        
+        let err = RoomError::PlayerNotFound(player_id, room_id);
+        assert!(err.to_string().contains("not found"));
+        
+        let err = RoomError::NicknameTaken("Alice".to_string(), room_id);
+        assert!(err.to_string().contains("Alice"));
+        assert!(err.to_string().contains("taken"));
+    }
+
+    #[test]
+    fn test_room_error_serialization() {
+        let errors = vec![
+            RoomError::NotFound("TEST01".to_string()),
+            RoomError::RoomNotFound,
+            RoomError::RoomFull,
+            RoomError::GameAlreadyStarted,
+            RoomError::PlayerNotFoundSimple,
+            RoomError::InvalidCode("INVALID".to_string()),
+            RoomError::Internal("Something went wrong".to_string()),
+        ];
+        
+        for error in errors {
+            let json = serde_json::to_string(&error).expect("Should serialize");
+            let _deserialized: RoomError = serde_json::from_str(&json).expect("Should deserialize");
+        }
+    }
+
+    #[test]
+    fn test_join_error_display() {
+        let err = JoinError::RoomNotFound;
+        assert!(err.to_string().contains("not found"));
+        
+        let err = JoinError::RoomFull;
+        assert!(err.to_string().contains("full"));
+        
+        let err = JoinError::GameInProgress;
+        assert!(err.to_string().contains("progress"));
+        
+        let err = JoinError::DuplicateNickname;
+        assert!(err.to_string().contains("taken"));
+    }
+
+    #[test]
+    fn test_join_error_serialization() {
+        let errors = vec![
+            JoinError::RoomNotFound,
+            JoinError::RoomFull,
+            JoinError::GameInProgress,
+            JoinError::DuplicateNickname,
+            JoinError::InvalidNickname,
+        ];
+        
+        for error in errors {
+            let json = serde_json::to_string(&error).expect("Should serialize");
+            let _deserialized: JoinError = serde_json::from_str(&json).expect("Should deserialize");
+        }
+    }
+
+    #[test]
+    fn test_error_variants_are_error_trait() {
+        use std::error::Error;
+        
+        let room_err: Box<dyn Error> = Box::new(RoomError::RoomNotFound);
+        assert!(room_err.to_string().len() > 0);
+        
+        let join_err: Box<dyn Error> = Box::new(JoinError::RoomFull);
+        assert!(join_err.to_string().len() > 0);
+    }
 }

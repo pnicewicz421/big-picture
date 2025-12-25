@@ -131,7 +131,8 @@ impl Room {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::AvatarId;
+    use crate::types::{AvatarId, ImageId};
+    use RoomState::*;
 
     fn create_test_player(nickname: &str) -> Player {
         Player::new(nickname.to_string(), AvatarId::default())
@@ -141,7 +142,7 @@ mod tests {
     fn test_room_creation() {
         let room = Room::new("ABC123".to_string());
         assert_eq!(room.code, "ABC123");
-        assert_eq!(room.state, RoomState::Lobby);
+        assert_eq!(room.state, Lobby);
         assert_eq!(room.player_count(), 0);
         assert!(room.game.is_none());
     }
@@ -217,5 +218,84 @@ mod tests {
         
         assert!(room.has_player_with_nickname("Alice"));
         assert!(!room.has_player_with_nickname("Bob"));
+    }
+
+    #[test]
+    fn test_room_state_transitions() {
+        let mut room = Room::new("STATE1".to_string());
+        assert_eq!(room.state, Lobby);
+        
+        room.add_player(create_test_player("Alice"));
+        room.add_player(create_test_player("Bob"));
+        
+        // Start game
+        let players: Vec<PlayerId> = room.players.iter().map(|p| p.id).collect();
+        room.game = Some(GameState::new(
+            ImageId::new("goal"),
+            ImageId::new("start"),
+            players,
+            3,
+        ));
+        room.state = InGame;
+        
+        assert_eq!(room.state, InGame);
+        assert!(room.game.is_some());
+    }
+
+    #[test]
+    fn test_room_empty_after_all_leave() {
+        let mut room = Room::new("EMPTY1".to_string());
+        
+        let p1 = create_test_player("Alice");
+        let p1_id = room.add_player(p1);
+        
+        let p2 = create_test_player("Bob");
+        let p2_id = room.add_player(p2);
+        
+        room.remove_player(p1_id);
+        room.remove_player(p2_id);
+        
+        assert_eq!(room.player_count(), 0);
+        assert!(!room.is_full());
+        assert!(!room.can_start());
+    }
+
+    #[test]
+    fn test_room_serialization() {
+        let mut room = Room::new("SER001".to_string());
+        room.add_player(create_test_player("Alice"));
+        room.add_player(create_test_player("Bob"));
+        
+        let json = serde_json::to_string(&room).expect("Should serialize");
+        let deserialized: Room = serde_json::from_str(&json).expect("Should deserialize");
+        
+        assert_eq!(deserialized.code, room.code);
+        assert_eq!(deserialized.player_count(), room.player_count());
+        assert_eq!(deserialized.state, room.state);
+    }
+
+    #[test]
+    fn test_room_max_capacity_exact() {
+        let mut room = Room::new("MAX001".to_string());
+        
+        for i in 0..8 {
+            let player = create_test_player(&format!("Player{}", i));
+            room.add_player(player);
+        }
+        
+        assert!(room.is_full());
+        assert_eq!(room.player_count(), 8);
+    }
+
+    #[test]
+    fn test_room_nickname_case_sensitivity() {
+        let mut room = Room::new("CASE01".to_string());
+        
+        room.add_player(create_test_player("Alice"));
+        
+        // Different case should be different nickname
+        assert!(!room.has_player_with_nickname("alice"));
+        assert!(!room.has_player_with_nickname("ALICE"));
+        assert!(room.has_player_with_nickname("Alice"));
     }
 }
