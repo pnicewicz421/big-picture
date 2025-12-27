@@ -340,6 +340,9 @@ impl IntoResponse for AppError {
             AppError::Room(RoomError::Internal(msg)) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, msg)
             }
+            AppError::Room(RoomError::NotEnoughPlayers(_)) => {
+                (StatusCode::BAD_REQUEST, "Not enough players to start the game".to_string())
+            }
             AppError::Join(JoinError::DuplicateNickname) => {
                 (StatusCode::CONFLICT, "Nickname already taken".to_string())
             }
