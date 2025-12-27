@@ -1,0 +1,8 @@
+target/
+godot/
+.git/
+.gitignore
+*.md
+.vscode/
+fly.toml
+.dockerignore

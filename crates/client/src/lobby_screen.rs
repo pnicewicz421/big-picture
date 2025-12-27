@@ -23,7 +23,7 @@ pub struct LobbyScreen {
     
     #[var]
     is_host: bool,
-    
+    q
     poll_timer: Option<Gd<Timer>>,
 }
 
