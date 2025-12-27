@@ -29,7 +29,7 @@ uuid = { version = "1.6", features = ["v4", "serde"] }
 
 # Web server
 axum = "0.7"
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
 tower = "0.4"
 
 # HTTP client

@@ -21,7 +21,7 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{Html, IntoResponse},
     routing::{get, post},
     Json, Router,
 };
@@ -87,8 +87,73 @@ async fn main() {
 }
 
 /// Health check endpoint.
-async fn health_check() -> &'static str {
-    "Big Picture Server v0.1.0"
+async fn health_check() -> Html<&'static str> {
+    Html(r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Big Picture - Game Lobby</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a2e;
+            color: #e94560;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        .container {
+            background-color: #16213e;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 500px;
+            width: 90%;
+        }
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        p {
+            color: #0f3460;
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+        }
+        .status {
+            background-color: #0f3460;
+            color: #fff;
+            padding: 1rem;
+            border-radius: 8px;
+            font-weight: bold;
+            margin-top: 1rem;
+        }
+        .version {
+            font-size: 0.8rem;
+            color: #533483;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Big Picture</h1>
+        <p>The ultimate collaborative drawing game</p>
+        <div class="status">
+            Server is LIVE and ready for players!
+        </div>
+        <div class="version">v0.1.0</div>
+    </div>
+</body>
+</html>
+"#)
 }
 
 // --- Request/Response DTOs ---
