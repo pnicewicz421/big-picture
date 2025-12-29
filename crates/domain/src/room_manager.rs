@@ -103,9 +103,11 @@ impl RoomManager {
         let room = self.rooms.get_mut(&room_id)
             .ok_or_else(|| RoomError::NotFound(room_id.to_string()))?;
             
+        let is_host = room.players.first().map(|p| p.id == player_id).unwrap_or(false);
+
         if room.remove_player(player_id) {
-            // If room is empty, we could potentially remove it
-            if room.player_count() == 0 {
+            // If room is empty OR the host left, remove the room
+            if room.player_count() == 0 || is_host {
                 let code = room.code.clone();
                 self.code_to_id.remove(&code);
                 self.rooms.remove(&room_id);
@@ -114,6 +116,37 @@ impl RoomManager {
         } else {
             Err(RoomError::PlayerNotFound(player_id, room_id))
         }
+    }
+
+    /// Start the game in a room.
+    pub fn start_game(&mut self, room_id: &RoomId) -> Result<(), RoomError> {
+        let room = self.rooms.get_mut(room_id)
+            .ok_or_else(|| RoomError::NotFound(room_id.to_string()))?;
+            
+        if room.state != RoomState::Lobby {
+            return Err(RoomError::AlreadyStarted(*room_id));
+        }
+        
+        if !room.can_start() {
+            return Err(RoomError::NotEnoughPlayers(*room_id));
+        }
+        
+        // Create initial game state
+        // In a real game, these would be randomly selected from a pool
+        let goal_image = crate::types::ImageId::new("goal_001".to_string());
+        let starting_image = crate::types::ImageId::new("start_001".to_string());
+        let player_ids: Vec<PlayerId> = room.players.iter().map(|p| p.id).collect();
+        
+        let game_state = crate::game::GameState::new(
+            goal_image,
+            starting_image,
+            player_ids,
+            3, // 3 rounds
+        );
+        
+        room.start_game(game_state);
+        
+        Ok(())
     }
 
     /// Get a room by ID.
@@ -267,12 +300,8 @@ mod tests {
         manager.leave_room(id, p2).unwrap();
         assert_eq!(manager.get_room(&id).unwrap().player_count(), 2);
         
-        // Remove first player
+        // Remove first player (host) - room should be deleted
         manager.leave_room(id, p1).unwrap();
-        assert_eq!(manager.get_room(&id).unwrap().player_count(), 1);
-        
-        // Remove last player - room should be deleted
-        manager.leave_room(id, p3).unwrap();
         assert!(manager.get_room(&id).is_none());
     }
 

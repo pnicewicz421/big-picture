@@ -23,7 +23,7 @@ pub struct LobbyScreen {
     
     #[var]
     is_host: bool,
-    q
+
     poll_timer: Option<Gd<Timer>>,
 }
 
@@ -33,7 +33,7 @@ impl IControl for LobbyScreen {
         godot_print!("LobbyScreen initialized");
         Self {
             base,
-            server_url: "http://192.168.1.19:3000".into(),
+            server_url: "https://big-picture-game.fly.dev".into(),
             room_id: "".into(),
             room_code: "".into(),
             player_id: "".into(),

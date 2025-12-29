@@ -104,13 +104,13 @@ async fn health_check() -> Html<&'static str> {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
             text-align: center;
         }
         .container {
             background-color: #16213e;
-            padding: 2rem;
+            padding: 2.5rem;
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             max-width: 500px;
@@ -121,36 +121,366 @@ async fn health_check() -> Html<&'static str> {
             margin-bottom: 0.5rem;
             text-transform: uppercase;
             letter-spacing: 3px;
+            color: #e94560;
         }
         p {
-            color: #0f3460;
-            font-size: 1.2rem;
+            color: #4ecca3;
+            font-size: 1.1rem;
             margin-bottom: 2rem;
         }
-        .status {
-            background-color: #0f3460;
+        .form-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
             color: #fff;
+            font-size: 0.9rem;
+        }
+        input {
+            width: 100%;
+            padding: 0.8rem;
+            border-radius: 8px;
+            border: 2px solid #0f3460;
+            background-color: #1a1a2e;
+            color: #fff;
+            font-size: 1rem;
+            box-sizing: border-box;
+            margin-bottom: 1rem;
+        }
+        input:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+        .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        button {
             padding: 1rem;
+            border: none;
             border-radius: 8px;
             font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+            text-transform: uppercase;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        .btn-primary {
+            background-color: #e94560;
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background-color: #ff4d6d;
+        }
+        .btn-secondary {
+            background-color: #4ecca3;
+            color: #1a1a2e;
+        }
+        .btn-secondary:hover {
+            background-color: #45b393;
+        }
+        .btn-outline {
+            background-color: transparent;
+            border: 2px solid #0f3460;
+            color: #fff;
+        }
+        .btn-outline:hover {
+            border-color: #e94560;
+        }
+        .btn-quit {
+            background-color: #533483;
+            color: #fff;
+            margin-top: 2rem;
+        }
+        #player-list {
+            list-style: none;
+            padding: 0;
+            margin: 2rem 0;
+            text-align: left;
+        }
+        #player-list li {
+            background-color: #1a1a2e;
+            padding: 0.8rem 1.2rem;
+            margin-bottom: 0.5rem;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid #4ecca3;
+        }
+        .room-code-display {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #4ecca3;
+            letter-spacing: 5px;
+            margin: 1rem 0;
+            background: #1a1a2e;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        #result {
             margin-top: 1rem;
+            padding: 0.8rem;
+            border-radius: 8px;
+            display: none;
+            font-size: 0.9rem;
+        }
+        .success {
+            background-color: rgba(78, 204, 163, 0.2);
+            color: #4ecca3;
+            border: 1px solid #4ecca3;
+        }
+        .error {
+            background-color: rgba(233, 69, 96, 0.2);
+            color: #e94560;
+            border: 1px solid #e94560;
         }
         .version {
             font-size: 0.8rem;
             color: #533483;
             margin-top: 2rem;
         }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Big Picture</h1>
-        <p>The ultimate collaborative drawing game</p>
-        <div class="status">
-            Server is LIVE and ready for players!
+        
+        <!-- Selection View -->
+        <div id="view-selection">
+            <p>Ready to play?</p>
+            <div class="actions">
+                <button class="btn-primary" onclick="showView('create')">New Room</button>
+                <button class="btn-secondary" onclick="showView('join')">Join Room</button>
+            </div>
         </div>
-        <div class="version">v0.1.0</div>
+
+        <!-- Create View -->
+        <div id="view-create" class="hidden">
+            <p>Create a new room</p>
+            <div class="form-group">
+                <label for="create-nickname">Your Nickname</label>
+                <input type="text" id="create-nickname" placeholder="Enter nickname..." maxlength="20">
+            </div>
+            <div class="actions">
+                <button class="btn-primary" onclick="createAndJoin()">Create & Join</button>
+                <button class="btn-outline" onclick="showView('selection')">Back</button>
+            </div>
+        </div>
+
+        <!-- Join View -->
+        <div id="view-join" class="hidden">
+            <p>Join an existing room</p>
+            <div class="form-group">
+                <label for="join-code">Room Code</label>
+                <input type="text" id="join-code" placeholder="e.g. ABC123" maxlength="6" style="text-transform: uppercase;">
+                <label for="join-nickname">Your Nickname</label>
+                <input type="text" id="join-nickname" placeholder="Enter nickname..." maxlength="20">
+            </div>
+            <div class="actions">
+                <button class="btn-secondary" onclick="joinExisting()">Join Game</button>
+                <button class="btn-outline" onclick="showView('selection')">Back</button>
+            </div>
+        </div>
+
+        <!-- Lobby View -->
+        <div id="view-lobby" class="hidden">
+            <p>Waiting for players...</p>
+            <div class="room-code-display" id="display-code">------</div>
+            <ul id="player-list"></ul>
+            <div class="actions">
+                <button id="btn-start-game" class="btn-primary hidden" onclick="startGame()">Start Game</button>
+                <button class="btn-quit" onclick="quitRoom()">Quit Room</button>
+            </div>
+        </div>
+
+        <div id="result"></div>
+        <div class="version">Server v0.1.0</div>
     </div>
+
+    <script>
+        let currentRoom = null; // { room_id, room_code, player_id, nickname }
+        let pollInterval = null;
+
+        function showView(viewName) {
+            document.getElementById('view-selection').classList.add('hidden');
+            document.getElementById('view-create').classList.add('hidden');
+            document.getElementById('view-join').classList.add('hidden');
+            document.getElementById('view-lobby').classList.add('hidden');
+            document.getElementById('result').style.display = 'none';
+
+            document.getElementById('view-' + viewName).classList.remove('hidden');
+        }
+
+        function showResult(message, isError = false) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = message;
+            resultDiv.className = isError ? 'error' : 'success';
+        }
+
+        async function createAndJoin() {
+            const nickname = document.getElementById('create-nickname').value.trim();
+            if (!nickname) {
+                showResult('Please enter a nickname', true);
+                return;
+            }
+
+            try {
+                // 1. Create Room
+                const createRes = await fetch('/rooms', { method: 'POST' });
+                const createData = await createRes.json();
+                if (!createRes.ok) throw new Error(createData.message || 'Failed to create room');
+
+                // 2. Join Room
+                const joinRes = await fetch(`/rooms/${createData.room_code}/join`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nickname, avatar_id: 0 })
+                });
+                const joinData = await joinRes.json();
+                if (!joinRes.ok) throw new Error(joinData.message || 'Failed to join room');
+
+                currentRoom = {
+                    room_id: createData.room_id,
+                    room_code: createData.room_code,
+                    player_id: joinData.player_id,
+                    nickname: nickname
+                };
+
+                enterLobby();
+            } catch (err) {
+                showResult(err.message, true);
+            }
+        }
+
+        async function joinExisting() {
+            const code = document.getElementById('join-code').value.trim().toUpperCase();
+            const nickname = document.getElementById('join-nickname').value.trim();
+
+            if (!code || !nickname) {
+                showResult('Please enter both code and nickname', true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`/rooms/${code}/join`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nickname, avatar_id: 0 })
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentRoom = {
+                        room_id: data.room_id,
+                        room_code: code,
+                        player_id: data.player_id,
+                        nickname: nickname
+                    };
+                    enterLobby();
+                } else {
+                    showResult(data.message || 'Room not found or full', true);
+                }
+            } catch (err) {
+                showResult('Network error', true);
+            }
+        }
+
+        function enterLobby() {
+            document.getElementById('display-code').textContent = currentRoom.room_code;
+            showView('lobby');
+            updatePlayerList();
+            pollInterval = setInterval(updatePlayerList, 2000);
+        }
+
+        async function updatePlayerList() {
+            if (!currentRoom) return;
+            try {
+                const res = await fetch(`/rooms/${currentRoom.room_id}`);
+                if (!res.ok) {
+                    if (res.status === 404) {
+                        showResult('Room was closed by host', true);
+                        setTimeout(quitRoom, 2000);
+                    }
+                    return;
+                }
+                const data = await res.json();
+                
+                // Check if we are the host (first player in list)
+                const isHost = data.players.length > 0 && data.players[0].id === currentRoom.player_id;
+                const startBtn = document.getElementById('btn-start-game');
+                
+                if (isHost) {
+                    startBtn.classList.remove('hidden');
+                    startBtn.disabled = data.players.length < 2;
+                    startBtn.title = data.players.length < 2 ? 'Need at least 2 players' : '';
+                } else {
+                    startBtn.classList.add('hidden');
+                }
+
+                const list = document.getElementById('player-list');
+                list.innerHTML = data.players.map((p, index) => `
+                    <li>
+                        <span>
+                            ${index === 0 ? '👑 ' : ''}${p.nickname} 
+                            ${p.id === currentRoom.player_id ? '(You)' : ''}
+                        </span>
+                        <span style="color: ${p.connected ? '#4ecca3' : '#e94560'}">
+                            ${p.connected ? '● Online' : '○ Offline'}
+                        </span>
+                    </li>
+                `).join('');
+
+                if (data.state === 'InGame') {
+                    showResult('Game is starting! (Transitioning...)');
+                    // Future: redirect to game view
+                }
+            } catch (err) {
+                console.error('Polling error', err);
+            }
+        }
+
+        async function startGame() {
+            if (!currentRoom) return;
+            try {
+                const res = await fetch(`/rooms/${currentRoom.room_id}/start`, { method: 'POST' });
+                if (res.ok) {
+                    showResult('Game started!');
+                } else {
+                    const text = await res.text();
+                    showResult(text || 'Failed to start game', true);
+                }
+            } catch (err) {
+                showResult('Network error', true);
+            }
+        }
+
+        async function quitRoom() {
+            if (currentRoom) {
+                try {
+                    await fetch(`/rooms/${currentRoom.room_id}/leave`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ player_id: currentRoom.player_id })
+                    });
+                } catch (err) {
+                    console.error('Error leaving room', err);
+                }
+            }
+            
+            clearInterval(pollInterval);
+            currentRoom = null;
+            showView('selection');
+        }
+    </script>
 </body>
 </html>
 "#)
@@ -321,7 +651,12 @@ async fn start_game(
     
     tracing::info!("Starting game in room {} with {} players", room_id, player_count);
     
-    // TODO: Actually start the game (future task)
+    // Drop the read lock before getting a write lock
+    drop(manager);
+    
+    let mut manager = state.room_manager.write().await;
+    manager.start_game(&room_id)?;
+    
     Ok(StatusCode::OK)
 }
 

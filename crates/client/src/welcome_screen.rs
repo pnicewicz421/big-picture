@@ -25,7 +25,7 @@ impl IControl for WelcomeScreen {
         godot_print!("WelcomeScreen initialized");
         Self {
             base,
-            server_url: "http://localhost:3000".into(),
+            server_url: "https://big-picture-game.fly.dev".into(),
             room_id: None,
             room_code: None,
             player_id: None,
@@ -35,7 +35,7 @@ impl IControl for WelcomeScreen {
     
     fn ready(&mut self) {
         godot_print!("WelcomeScreen ready");
-        self.set_status("Ready to play! Make sure server is running on 192.168.1.19:3000", false);
+        self.set_status("Ready to play! Connected to big-picture-game.fly.dev", false);
         
         // Create HTTPRequest nodes for network calls
         let mut create_request = HttpRequest::new_alloc();
