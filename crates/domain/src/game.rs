@@ -2,6 +2,18 @@
 
 use crate::types::{ImageId, OptionId, PlayerId};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// The stage of the game.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GameStage {
+    /// Revealing the communal goal and starting objects.
+    RevealGoal,
+    /// Active player turns.
+    PlayerTurn,
+    /// Final evaluation.
+    Evaluation,
+}
 
 /// The state of an active game.
 ///
@@ -11,11 +23,20 @@ pub struct GameState {
     /// The target image players are trying to reach.
     pub goal_image: ImageId,
     
+    /// The description of the communal goal.
+    pub communal_goal: String,
+    
     /// The initial image at the start of the game.
     pub starting_image: ImageId,
     
     /// The current image (updated after each turn).
     pub current_image: ImageId,
+    
+    /// The starting object assigned to each player.
+    pub player_starting_objects: HashMap<PlayerId, String>,
+    
+    /// Current stage of the game.
+    pub stage: GameStage,
     
     /// Players in turn order.
     pub players_in_order: Vec<PlayerId>,
@@ -37,7 +58,9 @@ impl GameState {
     /// Create a new game state.
     pub fn new(
         goal_image: ImageId,
+        communal_goal: String,
         starting_image: ImageId,
+        player_starting_objects: HashMap<PlayerId, String>,
         players: Vec<PlayerId>,
         max_rounds: u32,
     ) -> Self {
@@ -45,13 +68,25 @@ impl GameState {
         
         Self {
             goal_image,
+            communal_goal,
             starting_image,
             current_image,
+            player_starting_objects,
+            stage: GameStage::RevealGoal,
             players_in_order: players,
             current_turn_index: 0,
             max_rounds,
             current_round: 0,
             actions: Vec::new(),
+        }
+    }
+
+    /// Transition to the next stage.
+    pub fn next_stage(&mut self) {
+        match self.stage {
+            GameStage::RevealGoal => self.stage = GameStage::PlayerTurn,
+            GameStage::PlayerTurn => self.stage = GameStage::Evaluation,
+            GameStage::Evaluation => {}
         }
     }
 
@@ -154,7 +189,9 @@ mod tests {
         let players = vec![PlayerId::new(), PlayerId::new(), PlayerId::new()];
         let game = GameState::new(
             ImageId::new("goal"),
+            "A test goal".to_string(),
             ImageId::new("start"),
+            std::collections::HashMap::new(),
             players.clone(),
             3,
         );
@@ -171,7 +208,9 @@ mod tests {
         let players = vec![PlayerId::new(), PlayerId::new()];
         let mut game = GameState::new(
             ImageId::new("goal"),
+            "A test goal".to_string(),
             ImageId::new("start"),
+            std::collections::HashMap::new(),
             players.clone(),
             2,
         );
@@ -210,7 +249,9 @@ mod tests {
         let players = vec![PlayerId::new(), PlayerId::new()];
         let mut game = GameState::new(
             ImageId::new("goal"),
+            "A test goal".to_string(),
             ImageId::new("start"),
+            std::collections::HashMap::new(),
             players.clone(),
             2, // 2 rounds max
         );
@@ -240,7 +281,9 @@ mod tests {
         let players = vec![PlayerId::new()];
         let mut game = GameState::new(
             ImageId::new("goal"),
+            "A test goal".to_string(),
             ImageId::new("start"),
+            std::collections::HashMap::new(),
             players.clone(),
             1,
         );
@@ -265,7 +308,9 @@ mod tests {
         let players = vec![PlayerId::new()];
         let mut game = GameState::new(
             ImageId::new("goal"),
+            "A test goal".to_string(),
             ImageId::new("start"),
+            std::collections::HashMap::new(),
             players.clone(),
             3,
         );
@@ -292,7 +337,9 @@ mod tests {
         let players: Vec<PlayerId> = (0..8).map(|_| PlayerId::new()).collect();
         let game = GameState::new(
             ImageId::new("goal"),
+            "A test goal".to_string(),
             ImageId::new("start"),
+            std::collections::HashMap::new(),
             players.clone(),
             2,
         );
@@ -305,7 +352,9 @@ mod tests {
         let players = vec![PlayerId::new(), PlayerId::new(), PlayerId::new()];
         let mut game = GameState::new(
             ImageId::new("goal"),
+            "A test goal".to_string(),
             ImageId::new("start"),
+            std::collections::HashMap::new(),
             players.clone(),
             1,
         );
@@ -351,7 +400,9 @@ mod tests {
         let players = vec![PlayerId::new(), PlayerId::new()];
         let mut game = GameState::new(
             ImageId::new("goal_img"),
+            "A test goal".to_string(),
             ImageId::new("start_img"),
+            std::collections::HashMap::new(),
             players.clone(),
             3,
         );
@@ -380,7 +431,9 @@ mod tests {
         let players = vec![PlayerId::new(), PlayerId::new()];
         let game = GameState::new(
             ImageId::new("goal"),
+            "A test goal".to_string(),
             ImageId::new("start"),
+            std::collections::HashMap::new(),
             players,
             5,
         );
@@ -398,7 +451,9 @@ mod tests {
         let players = vec![PlayerId::new()];
         let mut game = GameState::new(
             ImageId::new("goal"),
+            "A test goal".to_string(),
             ImageId::new("start"),
+            std::collections::HashMap::new(),
             players.clone(),
             1,
         );
@@ -422,7 +477,9 @@ mod tests {
         let players = vec![PlayerId::new(), PlayerId::new()];
         let mut game = GameState::new(
             ImageId::new("goal"),
+            "A test goal".to_string(),
             ImageId::new("start"),
+            std::collections::HashMap::new(),
             players.clone(),
             3,
         );

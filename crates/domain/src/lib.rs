@@ -18,6 +18,7 @@ pub mod player;
 pub mod game;
 pub mod errors;
 pub mod room_manager;
+pub mod assets;
 
 // Re-export commonly used types at crate root
 pub use game::{GameOutcome, GameState, PlayerAction};

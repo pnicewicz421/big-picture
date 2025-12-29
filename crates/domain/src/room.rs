@@ -232,7 +232,9 @@ mod tests {
         let players: Vec<PlayerId> = room.players.iter().map(|p| p.id).collect();
         room.game = Some(GameState::new(
             ImageId::new("goal"),
+            "A test goal".to_string(),
             ImageId::new("start"),
+            std::collections::HashMap::new(),
             players,
             3,
         ));

@@ -72,6 +72,7 @@ async fn main() {
         .route("/rooms/:room_id/leave", post(leave_room))
         .route("/rooms/:code/rejoin", post(rejoin_room))
         .route("/rooms/:room_id/start", post(start_game))
+        .route("/rooms/:room_id/next", post(next_stage))
         .route("/rooms/:room_id", get(get_room_state))
         .layer(cors)
         .with_state(state);
@@ -224,6 +225,22 @@ async fn health_check() -> Html<&'static str> {
             padding: 1rem;
             border-radius: 8px;
         }
+        .goal-display {
+            background: #1a1a2e;
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 2px solid #4ecca3;
+            font-size: 1.2rem;
+            margin: 1rem 0;
+            line-height: 1.6;
+        }
+        .starting-object-box {
+            background: #16213e;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #4ecca3;
+        }
         #result {
             margin-top: 1rem;
             padding: 0.8rem;
@@ -301,6 +318,27 @@ async fn health_check() -> Html<&'static str> {
             </div>
         </div>
 
+        <!-- Game View -->
+        <div id="view-game" class="hidden">
+            <div id="game-reveal" class="hidden">
+                <h2>Communal Goal</h2>
+                <div class="goal-display" id="display-goal">...</div>
+                <div class="starting-object-box">
+                    <h3>Your Starting Object:</h3>
+                    <div id="display-starting-object" style="font-size: 1.5rem; color: #4ecca3; margin: 1rem 0;">...</div>
+                </div>
+                <div class="actions">
+                    <button id="btn-next-stage" class="btn-primary hidden" onclick="nextStage()">Continue to Turns</button>
+                </div>
+            </div>
+            <div id="game-turn" class="hidden">
+                <p>Game in progress...</p>
+            </div>
+            <div class="actions">
+                <button class="btn-quit" onclick="quitRoom()">Quit Game</button>
+            </div>
+        </div>
+
         <div id="result"></div>
         <div class="version">Server v0.1.0</div>
     </div>
@@ -314,6 +352,7 @@ async fn health_check() -> Html<&'static str> {
             document.getElementById('view-create').classList.add('hidden');
             document.getElementById('view-join').classList.add('hidden');
             document.getElementById('view-lobby').classList.add('hidden');
+            document.getElementById('view-game').classList.add('hidden');
             document.getElementById('result').style.display = 'none';
 
             document.getElementById('view-' + viewName).classList.remove('hidden');
@@ -439,9 +478,29 @@ async fn health_check() -> Html<&'static str> {
                     </li>
                 `).join('');
 
-                if (data.state === 'InGame') {
-                    showResult('Game is starting! (Transitioning...)');
-                    // Future: redirect to game view
+                if (data.state === 'InGame' && data.game) {
+                    showView('game');
+                    const isHost = data.players.length > 0 && data.players[0].id === currentRoom.player_id;
+                    
+                    if (data.game.stage === 'RevealGoal') {
+                        document.getElementById('game-reveal').classList.remove('hidden');
+                        document.getElementById('game-turn').classList.add('hidden');
+                        document.getElementById('display-goal').textContent = data.game.communal_goal;
+                        
+                        const myObj = data.game.player_starting_objects[currentRoom.player_id];
+                        document.getElementById('display-starting-object').textContent = myObj || 'Waiting...';
+                        
+                        const nextBtn = document.getElementById('btn-next-stage');
+                        if (isHost) {
+                            nextBtn.classList.remove('hidden');
+                        } else {
+                            nextBtn.classList.add('hidden');
+                        }
+                    } else if (data.game.stage === 'PlayerTurn') {
+                        document.getElementById('game-reveal').classList.add('hidden');
+                        document.getElementById('game-turn').classList.remove('hidden');
+                        // Future: show turn UI
+                    }
                 }
             } catch (err) {
                 console.error('Polling error', err);
@@ -457,6 +516,19 @@ async fn health_check() -> Html<&'static str> {
                 } else {
                     const text = await res.text();
                     showResult(text || 'Failed to start game', true);
+                }
+            } catch (err) {
+                showResult('Network error', true);
+            }
+        }
+
+        async function nextStage() {
+            if (!currentRoom) return;
+            try {
+                const res = await fetch(`/rooms/${currentRoom.room_id}/next`, { method: 'POST' });
+                if (!res.ok) {
+                    const text = await res.text();
+                    showResult(text || 'Failed to advance stage', true);
                 }
             } catch (err) {
                 showResult('Network error', true);
@@ -529,6 +601,16 @@ struct RoomStateResponse {
     state: String,
     player_count: usize,
     players: Vec<PlayerInfo>,
+    game: Option<GameInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GameInfo {
+    stage: String,
+    communal_goal: String,
+    player_starting_objects: std::collections::HashMap<String, String>,
+    current_image_id: String,
+    goal_image_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -660,6 +742,27 @@ async fn start_game(
     Ok(StatusCode::OK)
 }
 
+/// POST /rooms/:room_id/next - Transition to the next game stage.
+async fn next_stage(
+    State(state): State<AppState>,
+    Path(room_id_str): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let mut manager = state.room_manager.write().await;
+    let room_id = RoomId::from_string(&room_id_str)
+        .map_err(|_| AppError::InvalidRoomId)?;
+    
+    let room = manager
+        .get_room_mut(&room_id)
+        .ok_or(RoomError::RoomNotFound)?;
+    
+    if let Some(game) = &mut room.game {
+        game.next_stage();
+        Ok(StatusCode::OK)
+    } else {
+        Err(RoomError::Internal("Game not started".to_string()).into())
+    }
+}
+
 /// GET /rooms/:room_id - Get current room state.
 async fn get_room_state(
     State(state): State<AppState>,
@@ -684,12 +787,21 @@ async fn get_room_state(
         })
         .collect();
     
+    let game = room.game.as_ref().map(|g| GameInfo {
+        stage: format!("{:?}", g.stage),
+        communal_goal: g.communal_goal.clone(),
+        player_starting_objects: g.player_starting_objects.iter().map(|(k, v)| (k.to_string(), v.clone())).collect(),
+        current_image_id: g.current_image.as_str().to_string(),
+        goal_image_id: g.goal_image.as_str().to_string(),
+    });
+
     Ok(Json(RoomStateResponse {
         room_id: room_id.to_string(),
         room_code: room.code.clone(),
         state: format!("{:?}", room.state),
         player_count: room.player_count(),
         players,
+        game,
     }))
 }
 
