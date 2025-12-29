@@ -11,6 +11,11 @@ pub const ANIMALS: &[&str] = &[
     "A scuba-diving elephant",
     "A jetpack-wearing sloth",
     "A breakdancing turtle",
+    "A karate-chopping kangaroo",
+    "A DJ-ing dolphin",
+    "A detective owl",
+    "A chef raccoon",
+    "A ballerina hippo",
 ];
 
 pub const OBJECTS: &[&str] = &[
@@ -24,6 +29,11 @@ pub const OBJECTS: &[&str] = &[
     "A neon-glowing boombox",
     "A teapot that breathes bubbles",
     "A pair of sneakers with wings",
+    "A golden banana trophy",
+    "A hoverboard made of cookies",
+    "A magic wand that shoots confetti",
+    "A backpack full of rainbows",
+    "A telescope that sees into the future",
 ];
 
 pub const LOCATIONS: &[&str] = &[
@@ -37,6 +47,11 @@ pub const LOCATIONS: &[&str] = &[
     "on a floating island",
     "at a robot disco",
     "inside a giant bubble",
+    "at a dinosaur tea party",
+    "on a cloud made of cotton candy",
+    "inside a giant clock",
+    "at a carnival for aliens",
+    "in a library of floating books",
 ];
 
 use rand::seq::SliceRandom;
@@ -50,9 +65,11 @@ pub fn generate_game_assets(player_count: usize) -> (String, Vec<String>) {
     let object = OBJECTS.choose(&mut rng).unwrap_or(&"A mystery object");
     let location = LOCATIONS.choose(&mut rng).unwrap_or(&"in a mystery place");
     
-    let communal_goal = format!("{} with {} {}", animal, object, location);
+    // Create a more complex composite goal
+    let communal_goal = format!("{} holding {} {}", animal, object, location);
     
     // Pick unique starting objects for each player
+    // We want these to be simple (just one object or animal)
     let mut all_options = [ANIMALS, OBJECTS].concat();
     all_options.shuffle(&mut rng);
     

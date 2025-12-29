@@ -487,7 +487,8 @@ async fn health_check() -> Html<&'static str> {
                         document.getElementById('game-turn').classList.add('hidden');
                         document.getElementById('display-goal').textContent = data.game.communal_goal;
                         
-                        const myObj = data.game.player_starting_objects[currentRoom.player_id];
+                        const me = data.players.find(p => p.id === currentRoom.player_id);
+                        const myObj = me ? me.starting_object : null;
                         document.getElementById('display-starting-object').textContent = myObj || 'Waiting...';
                         
                         const nextBtn = document.getElementById('btn-next-stage');
@@ -619,6 +620,7 @@ struct PlayerInfo {
     nickname: String,
     avatar_id: u8,
     connected: bool,
+    starting_object: Option<String>,
 }
 
 // --- Handlers ---
@@ -779,11 +781,15 @@ async fn get_room_state(
     let players: Vec<PlayerInfo> = room
         .players
         .iter()
-        .map(|p| PlayerInfo {
-            id: p.id.to_string(),
-            nickname: p.nickname.clone(),
-            avatar_id: p.avatar_id.as_u8(),
-            connected: p.connected,
+        .map(|p| {
+            let starting_object = room.game.as_ref().and_then(|g| g.player_starting_objects.get(&p.id).cloned());
+            PlayerInfo {
+                id: p.id.to_string(),
+                nickname: p.nickname.clone(),
+                avatar_id: p.avatar_id.as_u8(),
+                connected: p.connected,
+                starting_object,
+            }
         })
         .collect();
     
