@@ -2,7 +2,7 @@
 
 use crate::types::{ImageId, OptionId, PlayerId};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// The stage of the game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -11,8 +11,10 @@ pub enum GameStage {
     RevealGoal,
     /// Active player turns.
     PlayerTurn,
-    /// Final evaluation.
-    Evaluation,
+    /// Voting on results.
+    Voting,
+    /// Final results and podium.
+    Results,
 }
 
 /// The state of an active game.
@@ -34,6 +36,9 @@ pub struct GameState {
     
     /// The starting object assigned to each player.
     pub player_starting_objects: HashMap<PlayerId, String>,
+
+    /// The current object description for each player (evolves during the game).
+    pub player_current_objects: HashMap<PlayerId, String>,
     
     /// Current stage of the game.
     pub stage: GameStage,
@@ -52,6 +57,21 @@ pub struct GameState {
     
     /// History of all actions taken.
     pub actions: Vec<PlayerAction>,
+
+    /// The 4 options available to the current player.
+    pub current_options: Vec<String>,
+
+    /// Timestamp when the current turn started (Unix seconds).
+    pub turn_start_time: Option<u64>,
+
+    /// Votes received: Voter -> Target -> Stars (0-5).
+    pub votes: HashMap<PlayerId, HashMap<PlayerId, u8>>,
+
+    /// Players who have submitted their votes.
+    pub players_who_voted: HashSet<PlayerId>,
+
+    /// Timestamp when the current stage started (Unix seconds).
+    pub stage_start_time: u64,
 }
 
 impl GameState {
@@ -65,6 +85,11 @@ impl GameState {
         max_rounds: u32,
     ) -> Self {
         let current_image = starting_image.clone();
+        let player_current_objects = player_starting_objects.clone();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         
         Self {
             goal_image,
@@ -72,21 +97,37 @@ impl GameState {
             starting_image,
             current_image,
             player_starting_objects,
+            player_current_objects,
             stage: GameStage::RevealGoal,
             players_in_order: players,
             current_turn_index: 0,
             max_rounds,
             current_round: 0,
             actions: Vec::new(),
+            current_options: Vec::new(),
+            turn_start_time: None,
+            votes: HashMap::new(),
+            players_who_voted: HashSet::new(),
+            stage_start_time: now,
         }
     }
 
     /// Transition to the next stage.
     pub fn next_stage(&mut self) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        self.stage_start_time = now;
+
         match self.stage {
-            GameStage::RevealGoal => self.stage = GameStage::PlayerTurn,
-            GameStage::PlayerTurn => self.stage = GameStage::Evaluation,
-            GameStage::Evaluation => {}
+            GameStage::RevealGoal => {
+                self.stage = GameStage::PlayerTurn;
+                self.start_turn();
+            },
+            GameStage::PlayerTurn => self.stage = GameStage::Voting,
+            GameStage::Voting => self.stage = GameStage::Results,
+            GameStage::Results => {}
         }
     }
 
@@ -95,11 +136,57 @@ impl GameState {
         self.players_in_order.get(self.current_turn_index).copied()
     }
 
-    /// Record a player action and advance to the next turn.
-    pub fn record_action(&mut self, action: PlayerAction) {
-        self.current_image = action.resulting_image.clone();
-        self.actions.push(action);
+    /// Start the turn for the current player.
+    pub fn start_turn(&mut self) {
+        if let Some(_) = self.current_player() {
+            self.current_options = crate::assets::generate_modification_options();
+            self.turn_start_time = Some(std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs());
+        }
+    }
+
+    /// Submit an action for the current player.
+    pub fn submit_action(&mut self, player_id: PlayerId, option_index: Option<usize>) -> Result<(), String> {
+        if self.stage != GameStage::PlayerTurn {
+            return Err("Not in turn stage".to_string());
+        }
+        if Some(player_id) != self.current_player() {
+            return Err("Not your turn".to_string());
+        }
+        
+        // Apply modification if option chosen
+        if let Some(idx) = option_index {
+            if idx >= self.current_options.len() {
+                return Err("Invalid option".to_string());
+            }
+            let modifier = &self.current_options[idx];
+            
+            if let Some(obj) = self.player_current_objects.get_mut(&player_id) {
+                *obj = crate::assets::apply_modification(obj, modifier);
+                
+                self.actions.push(PlayerAction {
+                    player_id,
+                    round: self.current_round,
+                    option_chosen: Some(idx),
+                    modification: modifier.clone(),
+                    resulting_object: obj.clone(),
+                });
+            }
+        } else {
+             // Timeout or skip
+             self.actions.push(PlayerAction {
+                player_id,
+                round: self.current_round,
+                option_chosen: None,
+                modification: "No action".to_string(),
+                resulting_object: self.player_current_objects.get(&player_id).cloned().unwrap_or_default(),
+            });
+        }
+
         self.advance_turn();
+        Ok(())
     }
 
     /// Advance to the next player's turn.
@@ -110,6 +197,16 @@ impl GameState {
         if self.current_turn_index >= self.players_in_order.len() {
             self.current_turn_index = 0;
             self.current_round += 1;
+        }
+
+        if self.current_round >= self.max_rounds {
+            self.stage = GameStage::Voting;
+            self.stage_start_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+        } else {
+            self.start_turn();
         }
     }
 
@@ -127,6 +224,65 @@ impl GameState {
     pub fn player_count(&self) -> usize {
         self.players_in_order.len()
     }
+
+    /// Submit votes from one player for multiple targets.
+    pub fn submit_votes(&mut self, voter_id: PlayerId, votes: HashMap<PlayerId, u8>) -> Result<(), String> {
+        if self.stage != GameStage::Voting {
+            return Err("Not in voting stage".to_string());
+        }
+        
+        // Validate votes
+        for (target_id, stars) in &votes {
+            if *target_id == voter_id {
+                return Err("Cannot vote for yourself".to_string());
+            }
+            if *stars > 5 {
+                return Err("Stars must be between 0 and 5".to_string());
+            }
+        }
+
+        // Store votes
+        self.votes.insert(voter_id, votes);
+        self.players_who_voted.insert(voter_id);
+
+        // Check if all players have voted
+        // Note: We only expect votes from connected players, but for simplicity we check against all players in order
+        // In a real scenario, we might want to handle disconnected players better.
+        if self.players_who_voted.len() >= self.players_in_order.len() {
+            self.stage = GameStage::Results;
+            self.stage_start_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+        }
+            
+        Ok(())
+    }
+
+    /// Calculate scores for all players.
+    pub fn calculate_scores(&self) -> HashMap<PlayerId, f32> {
+        let mut scores = HashMap::new();
+        
+        for player_id in &self.players_in_order {
+            let mut total_stars = 0;
+            let mut vote_count = 0;
+            
+            for voter_votes in self.votes.values() {
+                if let Some(&stars) = voter_votes.get(player_id) {
+                    total_stars += stars as u32;
+                    vote_count += 1;
+                }
+            }
+            
+            if vote_count > 0 {
+                scores.insert(*player_id, total_stars as f32 / vote_count as f32);
+            } else {
+                scores.insert(*player_id, 0.0);
+            }
+        }
+        
+        scores
+    }
 }
 
 /// A single player action during the game.
@@ -138,33 +294,14 @@ pub struct PlayerAction {
     /// The round number when this action was taken (0-based).
     pub round: u32,
     
-    /// The option chosen by the player (0-3).
-    pub option_chosen: OptionId,
+    /// The option chosen by the player (index).
+    pub option_chosen: Option<usize>,
     
     /// Text description of the modification.
-    pub description: String,
+    pub modification: String,
     
-    /// The resulting image after this action.
-    pub resulting_image: ImageId,
-}
-
-impl PlayerAction {
-    /// Create a new player action.
-    pub fn new(
-        player_id: PlayerId,
-        round: u32,
-        option_chosen: OptionId,
-        description: String,
-        resulting_image: ImageId,
-    ) -> Self {
-        Self {
-            player_id,
-            round,
-            option_chosen,
-            description,
-            resulting_image,
-        }
-    }
+    /// The resulting object description.
+    pub resulting_object: String,
 }
 
 /// The outcome of a game evaluation.

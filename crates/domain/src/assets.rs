@@ -54,6 +54,29 @@ pub const LOCATIONS: &[&str] = &[
     "in a library of floating books",
 ];
 
+pub const MODIFIERS: &[&str] = &[
+    "wearing a top hat",
+    "holding a lightsaber",
+    "wearing sunglasses",
+    "riding a skateboard",
+    "eating a pizza",
+    "on fire (safely)",
+    "covered in glitter",
+    "wearing a cape",
+    "holding a balloon",
+    "wearing clown shoes",
+    "surrounded by butterflies",
+    "holding a sign that says 'Help'",
+    "wearing a tutu",
+    "holding a rubber chicken",
+    "wearing a space helmet",
+    "that is giant",
+    "that is tiny",
+    "that is glowing green",
+    "that is invisible (mostly)",
+    "made of jelly",
+];
+
 use rand::seq::SliceRandom;
 
 /// Generate a random composite goal and individual starting objects for players.
@@ -79,4 +102,17 @@ pub fn generate_game_assets(player_count: usize) -> (String, Vec<String>) {
         .collect();
         
     (communal_goal, player_objects)
+}
+
+/// Generate 4 random modification options.
+pub fn generate_modification_options() -> Vec<String> {
+    let mut rng = rand::thread_rng();
+    let mut options: Vec<String> = MODIFIERS.iter().map(|s| s.to_string()).collect();
+    options.shuffle(&mut rng);
+    options.into_iter().take(4).collect()
+}
+
+/// Apply a modification to an object description.
+pub fn apply_modification(object: &str, modifier: &str) -> String {
+    format!("{} {}", object, modifier)
 }
